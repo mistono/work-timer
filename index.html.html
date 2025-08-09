@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>作業タイマー & 集計</title>
+  <style>
+    :root {
+      --bg: #0f172a; /* slate-900 */
+      --card: #111827; /* gray-900 */
+      --muted: #334155; /* slate-600 */
+      --text: #e5e7eb; /* gray-200 */
+      --accent: #22c55e; /* green-500 */
+      --warn: #f59e0b; /* amber-500 */
+      --danger: #ef4444; /* red-500 */
+      --border: #1f2937; /* gray-800 */
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: var(--bg); color: var(--text);
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
+    .nav {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;
+    }
+    .tabbtn { border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 12px; border-radius: 12px; font-weight: 600; }
+    .tabbtn.active { outline: 2px solid var(--accent); }
+    .card { border: 1px solid var(--border); background: var(--card); border-radius: 16px; padding: 16px; }
+    h1 { font-size: 20px; margin: 8px 0 12px; }
+    label { display: block; font-size: 14px; margin: 10px 0 4px; color: #cbd5e1; }
+    input, select {
+      width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: #0b1220; color: var(--text);
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btnbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: #0b1220; color: var(--text); font-weight: 600; }
+    button.primary { background: var(--accent); color: #052e16; border-color: #16a34a; }
+    button.warn { background: var(--warn); color: #1f1300; border-color: #b45309; }
+    button.danger { background: var(--danger); color: #2f0b0b; border-color: #b91c1c; }
+    .timer {
+      font-variant-numeric: tabular-nums; font-size: 40px; letter-spacing: 1px; text-align: center;
+      padding: 12px; border: 1px dashed var(--muted); border-radius: 12px; margin-top: 8px; background: #0b1220;
+    }
+    .muted { color: #94a3b8; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--border); padding: 10px; text-align: left; font-size: 14px; }
+    th { color: #cbd5e1; }
+    .right { text-align: right; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #0b1220; border: 1px solid var(--border); font-size: 12px; color: #cbd5e1; }
+    .help { font-size: 13px; color: #cbd5e1; }
+    .footer { margin-top: 20px; font-size: 12px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav">
+      <button class="tabbtn active" id="tabTimerBtn">⏱ 作業タイマー</button>
+      <button class="tabbtn" id="tabSummaryBtn">📊 集計（本日/日付指定）</button>
+    </div>
+
+    <!-- Timer Panel -->
+    <section id="panelTimer" class="card">
+      <h1>⏱ 作業タイマー</h1>
+      <div class="row">
+        <div>
+          <label for="taskName">作業項目 <span class="muted">（例：検査 / 初期化 / 清掃）</span></label>
+          <input id="taskName" placeholder="例：検査" />
+        </div>
+        <div>
+          <label for="taskAmount">作業台数</label>
+          <input id="taskAmount" type="number" inputmode="numeric" placeholder="例：11" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="worker">作業担当者</label>
+          <input id="worker" placeholder="氏名（次回以降は自動入力）" />
+        </div>
+        <div>
+          <label for="notes">メモ（任意）</label>
+          <input id="notes" placeholder="トラブル・備考など" />
+        </div>
+      </div>
+
+      <div class="btnbar">
+        <button class="primary" id="btnStart">作業開始</button>
+        <button id="btnPause" style="display:none">⏸ 作業中断</button>
+        <button class="warn" id="btnResume" style="display:none">▶ 作業再開</button>
+        <button class="danger" id="btnFinish" style="display:none">✅ 作業完了</button>
+        <button id="btnReset" style="display:none">🗑 破棄</button>
+      </div>
+
+      <div class="timer" id="timerDisplay">00:00:00</div>
+      <div class="muted" id="statusLine">待機中</div>
+      <div class="help" style="margin-top:8px">※ スマホに追加するときは、このページのURLをQR化してください（GitHub Pages のURL）。</div>
+    </section>
+
+    <!-- Summary Panel -->
+    <section id="panelSummary" class="card" style="display:none">
+      <h1>📊 集計</h1>
+      <div class="row">
+        <div>
+          <label for="datePick">対象日（ローカル保存分）</label>
+          <input id="datePick" type="date" />
+        </div>
+        <div>
+          <label>エクスポート</label>
+          <div class="btnbar">
+            <button id="btnCsv">CSVダウンロード</button>
+            <button id="btnClearDay" class="danger">この日の記録を削除</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow:auto; margin-top: 10px;">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>開始</th>
+              <th>終了</th>
+              <th>作業</th>
+              <th class="right">台数</th>
+              <th>担当</th>
+              <th>メモ</th>
+              <th class="right">時間</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot>
+            <tr>
+              <th colspan="6" class="right">合計</th>
+              <th class="right" id="totalCell">00:00:00</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="footer">※ 記録はこの端末のローカルストレージに保存されます。複数端末で集約したい場合は Google スプレッドシート連携版も用意可能です。</div>
+    </section>
+  </div>
+
+  <script>
+    // ---------- 共通ユーティリティ ----------
+    const $ = (sel) => document.querySelector(sel);
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const fmtTime = (ms) => {
+      const sec = Math.floor(ms / 1000);
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+    };
+    const ymd = (d=new Date()) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    const hm = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+
+    function toast(msg){
+      // シンプルなアラート代用（バイブ+alertを抑制）
+      console.log(msg);
+    }
+
+    // ---------- ステート ----------
+    let state = {
+      running: false,
+      paused: false,
+      startAt: null,
+      pauseAccum: 0,
+      tickId: null,
+    };
+
+    // ---------- タブ切替 ----------
+    function showTab(tab){
+      const isSummary = tab === 'summary';
+      $('#panelTimer').style.display = isSummary ? 'none' : 'block';
+      $('#panelSummary').style.display = isSummary ? 'block' : 'none';
+      $('#tabTimerBtn').classList.toggle('active', !isSummary);
+      $('#tabSummaryBtn').classList.toggle('active', isSummary);
+      if(isSummary){
+        $('#datePick').value = ymd(new Date());
+        renderTableFor($('#datePick').value);
+      }
+      location.hash = isSummary ? '#summary' : '#timer';
+    }
+
+    $('#tabTimerBtn').addEventListener('click', () => showTab('timer'));
+    $('#tabSummaryBtn').addEventListener('click', () => showTab('summary'));
+    window.addEventListener('hashchange', () => {
+      if(location.hash === '#summary') showTab('summary');
+      else showTab('timer');
+    });
+
+    // ---------- ストレージ ----------
+    const LS_KEY = 'work_timer_logs_v1';
+    function loadLogs(){
+      try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ return {}; }
+    }
+    function saveLogs(data){
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    }
+    function pushLog(entry){
+      const data = loadLogs();
+      const key = entry.date; // YYYY-MM-DD
+      if(!data[key]) data[key] = [];
+      data[key].push(entry);
+      saveLogs(data);
+    }
+    function getLogsByDate(dateStr){
+      const data = loadLogs();
+      return data[dateStr] || [];
+    }
+    function clearDate(dateStr){
+      const data = loadLogs();
+      delete data[dateStr];
+      saveLogs(data);
+    }
+
+    // ---------- タイマー表示 ----------
+    function setStatus(text){ $('#statusLine').textContent = text; }
+    function updateTimer(){
+      if(!state.running) return;
+      const now = Date.now();
+      const elapsed = (now - state.startAt) + state.pauseAccum;
+      $('#timerDisplay').textContent = fmtTime(elapsed);
+    }
+    function startTick(){
+      stopTick();
+      state.tickId = setInterval(updateTimer, 250);
+    }
+    function stopTick(){ if(state.tickId){ clearInterval(state.tickId); state.tickId = null; } }
+
+    // ---------- 入力補助 ----------
+    const workerInput = $('#worker');
+    const savedWorker = localStorage.getItem('default_worker');
+    if(savedWorker) workerInput.value = savedWorker;
+
+    // ---------- ボタン動作 ----------
+    $('#btnStart').addEventListener('click', () => {
+      const task = $('#taskName').value.trim();
+      const amount = Number($('#taskAmount').value || 0);
+      const worker = workerInput.value.trim();
+      if(!task) return alert('作業項目を入力してください');
+      if(!worker) return alert('担当者を入力してください');
+
+      localStorage.setItem('default_worker', worker);
+
+      state.running = true;
+      state.paused = false;
+      state.startAt = Date.now();
+      state.pauseAccum = 0;
+      startTick(); updateTimer();
+
+      $('#btnStart').style.display = 'none';
+      $('#btnPause').style.display = 'inline-block';
+      $('#btnResume').style.display = 'none';
+      $('#btnFinish').style.display = 'inline-block';
+      $('#btnReset').style.display = 'inline-block';
+      setStatus('計測中…');
+    });
+
+    $('#btnPause').addEventListener('click', () => {
+      if(!state.running || state.paused) return;
+      state.paused = true;
+      const now = Date.now();
+      state.pausePoint = now;
+      stopTick();
+      $('#btnPause').style.display = 'none';
+      $('#btnResume').style.display = 'inline-block';
+      setStatus('一時停止中');
+    });
+
+    $('#btnResume').addEventListener('click', () => {
+      if(!state.running || !state.paused) return;
+      const now = Date.now();
+      state.pauseAccum += (now - state.pausePoint);
+      state.paused = false;
+      startTick(); updateTimer();
+      $('#btnPause').style.display = 'inline-block';
+      $('#btnResume').style.display = 'none';
+      setStatus('計測中…');
+    });
+
+    $('#btnFinish').addEventListener('click', () => {
+      if(!state.running) return;
+      stopTick();
+      const endAt = Date.now();
+      const task = $('#taskName').value.trim();
+      const amount = Number($('#taskAmount').value || 0);
+      const worker = workerInput.value.trim();
+      const notes = $('#notes').value.trim();
+
+      // 最終経過時間
+      const elapsed = (endAt - state.startAt) + state.pauseAccum - (state.paused ? (endAt - state.pausePoint) : 0);
+      const startDate = new Date(state.startAt);
+      const endDate = new Date(endAt);
+
+      const entry = {
+        date: ymd(startDate),
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        task, amount, worker, notes,
+        durationMs: Math.max(elapsed, 0)
+      };
+      pushLog(entry);
+
+      $('#timerDisplay').textContent = fmtTime(entry.durationMs);
+      setStatus(`保存しました（${hm(startDate)} → ${hm(endDate)} / ${fmtTime(entry.durationMs)}）`);
+
+      // UIリセット
+      state.running = false; state.paused = false; state.pauseAccum = 0; state.startAt = null;
+      $('#btnStart').style.display = 'inline-block';
+      $('#btnPause').style.display = 'none';
+      $('#btnResume').style.display = 'none';
+      $('#btnFinish').style.display = 'none';
+      $('#btnReset').style.display = 'none';
+
+      // 入力は残す（連続作業しやすく）
+      toast('完了と保存が完了しました');
+    });
+
+    $('#btnReset').addEventListener('click', () => {
+      if(confirm('計測を破棄しますか？')){
+        stopTick();
+        state = { running:false, paused:false, startAt:null, pauseAccum:0, tickId:null };
+        $('#timerDisplay').textContent = '00:00:00';
+        setStatus('待機中');
+        $('#btnStart').style.display = 'inline-block';
+        $('#btnPause').style.display = 'none';
+        $('#btnResume').style.display = 'none';
+        $('#btnFinish').style.display = 'none';
+        $('#btnReset').style.display = 'none';
+      }
+    });
+
+    // ---------- 集計 ----------
+    function renderTableFor(dateStr){
+      const rows = getLogsByDate(dateStr);
+      const tbody = $('#tbl tbody');
+      tbody.innerHTML = '';
+      let total = 0;
+      for(const r of rows){
+        const tr = document.createElement('tr');
+        const s = new Date(r.start);
+        const e = new Date(r.end);
+        total += (r.durationMs||0);
+        tr.innerHTML = `
+          <td>${hm(s)}</td>
+          <td>${hm(e)}</td>
+          <td>${escapeHtml(r.task||'')}</td>
+          <td class="right">${Number(r.amount||0)}</td>
+          <td>${escapeHtml(r.worker||'')}</td>
+          <td>${escapeHtml(r.notes||'')}</td>
+          <td class="right"><span class="pill">${fmtTime(r.durationMs||0)}</span></td>
+        `;
+        tbody.appendChild(tr);
+      }
+      $('#totalCell').textContent = fmtTime(total);
+    }
+
+    function escapeHtml(s){
+      return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    $('#datePick').addEventListener('change', (e)=>{
+      renderTableFor(e.target.value);
+    });
+
+    $('#btnCsv').addEventListener('click', () => {
+      const dateStr = $('#datePick').value || ymd(new Date());
+      const rows = getLogsByDate(dateStr);
+      const head = ['date','start','end','task','amount','worker','notes','durationSec'];
+      const lines = [head.join(',')];
+      for(const r of rows){
+        const durationSec = Math.round((r.durationMs||0)/1000);
+        const csvRow = [r.date, r.start, r.end, q(r.task), r.amount, q(r.worker), q(r.notes), durationSec].join(',');
+        lines.push(csvRow);
+      }
+      const blob = new Blob(["\uFEFF"+lines.join('\n')], {type:'text/csv'}); // BOM付でExcel互換
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `work_logs_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    $('#btnClearDay').addEventListener('click', () => {
+      const dateStr = $('#datePick').value || ymd(new Date());
+      if(confirm(`${dateStr} の記録を削除します。よろしいですか？`)){
+        clearDate(dateStr);
+        renderTableFor(dateStr);
+      }
+    });
+
+    function q(v){
+      // CSVセル用にダブルクォートエスケープ
+      const s = String(v==null?'':v);
+      return '"' + s.replace(/"/g,'""') + '"';
+    }
+
+    // ---------- 初期表示 ----------
+    (function init(){
+      if(location.hash === '#summary') showTab('summary');
+      else showTab('timer');
+    })();
+  </script>
+</body>
+</html>
